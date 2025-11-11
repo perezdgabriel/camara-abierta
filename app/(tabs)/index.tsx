@@ -1,98 +1,149 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useEffect, useState } from "react";
+import { ActivityIndicator, StyleSheet } from "react-native";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import ParallaxScrollView from "@/components/parallax-scroll-view";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import CongressAPI from "@/services/CongressAPIService";
 
 export default function HomeScreen() {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any>(null);
+  const [recentLegislators, setRecentLegislators] = useState<any[]>([]);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      // Cargar algunos legisladores
+      const legislators = await CongressAPI.getCurrentLegislators();
+      console.log({ legislators });
+      setRecentLegislators(legislators.slice(0, 3));
+
+      // Obtener estadísticas
+      const apiStats = CongressAPI.getRequestStats();
+      setStats(apiStats);
+    } catch (error) {
+      console.error("Error cargando datos:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <ThemedView style={styles.centerContainer}>
+        <ActivityIndicator size="large" />
+        <ThemedText style={styles.loadingText}>
+          Cargando datos del Congreso...
+        </ThemedText>
+      </ThemedView>
+    );
+  }
+
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
+      headerBackgroundColor={{ light: "#003DA5", dark: "#1D3D47" }}
       headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+        <IconSymbol
+          size={310}
+          color="#FFFFFF"
+          name="building.columns.fill"
+          style={styles.headerImage}
         />
-      }>
+      }
+    >
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
+        <ThemedText type="title">🇨🇱 Congreso de Chile</ThemedText>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
+      <ThemedText>Datos Abiertos del Congreso Nacional</ThemedText>
+      <ThemedText style={{ marginTop: 10 }}>
+        Usa las pestañas inferiores para explorar legisladores, votaciones,
+        comisiones y estadísticas.
+      </ThemedText>
+
+      {/* Legisladores Destacados */}
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
+        <ThemedText type="subtitle">👥 Algunos Legisladores</ThemedText>
+        {recentLegislators.map((leg, index) => (
+          <ThemedView key={index} style={styles.legislatorItem}>
+            <ThemedText>{leg.Diputado.Nombre || "Sin nombre"}</ThemedText>
+          </ThemedView>
+        ))}
       </ThemedView>
+
+      {/* Estadísticas API */}
+      {stats && (
+        <ThemedView style={styles.stepContainer}>
+          <ThemedText type="subtitle">📊 Estadísticas de Peticiones</ThemedText>
+          <ThemedText>
+            Peticiones totales: {stats.peticiones_totales}
+          </ThemedText>
+          <ThemedText>
+            Peticiones fallidas: {stats.peticiones_fallidas}
+          </ThemedText>
+          <ThemedText>Tasa de éxito: {stats.tasa_exito}%</ThemedText>
+        </ThemedView>
+      )}
     </ParallaxScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+  },
+  headerImage: {
+    color: "#FFFFFF",
+    bottom: -90,
+    left: -35,
+    position: "absolute",
+  },
   titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   stepContainer: {
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  quickAccessContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  quickAccessButton: {
+    alignItems: "center",
+    padding: 15,
+    width: "48%",
+    backgroundColor: "#F0F0F0",
+    borderRadius: 10,
+  },
+  quickAccessIcon: {
+    fontSize: 32,
+    marginBottom: 5,
+  },
+  quickAccessText: {
+    fontSize: 12,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  legislatorItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E0E0E0",
   },
 });
