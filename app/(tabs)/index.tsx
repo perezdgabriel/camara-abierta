@@ -2,15 +2,16 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet } from "react-native";
 
 import ParallaxScrollView from "@/components/parallax-scroll-view";
+import ParliamentChart from "@/components/parliament-chart";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import CongressAPI from "@/services/CongressAPIService";
+import { DiputadoPeriodo } from "@/types";
 
 export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>(null);
-  const [recentLegislators, setRecentLegislators] = useState<any[]>([]);
+  const [legislators, setLegislators] = useState<DiputadoPeriodo[]>([]);
 
   useEffect(() => {
     loadData();
@@ -20,14 +21,10 @@ export default function HomeScreen() {
     try {
       setLoading(true);
 
-      // Cargar algunos legisladores
-      const legislators = await CongressAPI.getCurrentLegislators();
-      console.log({ legislators });
-      setRecentLegislators(legislators.slice(0, 3));
-
-      // Obtener estadísticas
-      const apiStats = CongressAPI.getRequestStats();
-      setStats(apiStats);
+      // Load all current legislators
+      const allLegislators = await CongressAPI.getCurrentLegislators();
+      console.log({ legislators: allLegislators });
+      setLegislators(allLegislators);
     } catch (error) {
       console.error("Error cargando datos:", error);
     } finally {
@@ -64,33 +61,19 @@ export default function HomeScreen() {
 
       <ThemedText>Datos Abiertos del Congreso Nacional</ThemedText>
       <ThemedText style={{ marginTop: 10 }}>
-        Usa las pestañas inferiores para explorar legisladores, votaciones,
-        comisiones y estadísticas.
+        Visualiza la composición actual de la Cámara de Diputados y explora
+        información detallada de cada legislador.
       </ThemedText>
 
-      {/* Legisladores Destacados */}
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">👥 Algunos Legisladores</ThemedText>
-        {recentLegislators.map((leg, index) => (
-          <ThemedView key={index} style={styles.legislatorItem}>
-            <ThemedText>{leg.Diputado.Nombre || "Sin nombre"}</ThemedText>
-          </ThemedView>
-        ))}
-      </ThemedView>
+      {/* Parliament Visualization */}
+      <ParliamentChart legislators={legislators} size={340} />
 
-      {/* Estadísticas API */}
-      {stats && (
-        <ThemedView style={styles.stepContainer}>
-          <ThemedText type="subtitle">📊 Estadísticas de Peticiones</ThemedText>
-          <ThemedText>
-            Peticiones totales: {stats.peticiones_totales}
-          </ThemedText>
-          <ThemedText>
-            Peticiones fallidas: {stats.peticiones_fallidas}
-          </ThemedText>
-          <ThemedText>Tasa de éxito: {stats.tasa_exito}%</ThemedText>
-        </ThemedView>
-      )}
+      <ThemedView style={styles.infoContainer}>
+        <ThemedText style={styles.infoText}>
+          💡 Usa las pestañas inferiores para explorar legisladores, votaciones
+          y comisiones.
+        </ThemedText>
+      </ThemedView>
     </ParallaxScrollView>
   );
 }
@@ -119,31 +102,17 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 16,
   },
-  quickAccessContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    gap: 8,
+  infoContainer: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: "rgba(0, 61, 165, 0.05)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0, 61, 165, 0.1)",
   },
-  quickAccessButton: {
-    alignItems: "center",
-    padding: 15,
-    width: "48%",
-    backgroundColor: "#F0F0F0",
-    borderRadius: 10,
-  },
-  quickAccessIcon: {
-    fontSize: 32,
-    marginBottom: 5,
-  },
-  quickAccessText: {
-    fontSize: 12,
-    fontWeight: "bold",
+  infoText: {
+    fontSize: 14,
     textAlign: "center",
-  },
-  legislatorItem: {
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    lineHeight: 20,
   },
 });

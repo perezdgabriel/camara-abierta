@@ -152,12 +152,22 @@ class CongressAPIService {
 
   /**
    * Obtener detalles de un legislador específico
+   * Returns the complete DiputadoPeriodo information for a single legislator
    */
   async getLegislator(legislatorId) {
-    const data = await this._makeRequest("WSDiputado", "retornarDiputado", {
-      prmDiputadoId: legislatorId,
-    });
-    return data;
+    // First get all current legislators
+    const allLegislators = await this.getCurrentLegislators();
+
+    // Find the specific legislator by ID
+    const legislator = allLegislators.find(
+      (leg) => leg.Diputado.Id === parseInt(legislatorId)
+    );
+
+    if (!legislator) {
+      throw new Error(`Legislador con ID ${legislatorId} no encontrado`);
+    }
+
+    return legislator;
   }
 
   /**

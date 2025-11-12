@@ -1,7 +1,9 @@
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   TextInput,
 } from "react-native";
@@ -13,12 +15,21 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import CongressAPI from "@/services/CongressAPIService";
+import {
+  DiputadoPeriodo,
+  getCurrentMilitancia,
+  getFullName,
+  mergeSequentialMilitancias,
+} from "@/types";
 
 export default function LegislatorsScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const [loading, setLoading] = useState(true);
-  const [legislators, setLegislators] = useState<any[]>([]);
-  const [filteredLegislators, setFilteredLegislators] = useState<any[]>([]);
+  const [legislators, setLegislators] = useState<DiputadoPeriodo[]>([]);
+  const [filteredLegislators, setFilteredLegislators] = useState<
+    DiputadoPeriodo[]
+  >([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const loadLegislators = async () => {
@@ -42,12 +53,13 @@ export default function LegislatorsScreen() {
 
     const query = searchQuery.toLowerCase();
     const filtered = legislators.filter((leg) => {
-      const nombre = (leg.Nombre || "").toLowerCase();
-      const partido = (leg.Partido?.Nombre || "").toLowerCase();
+      const fullName = getFullName(leg.Diputado).toLowerCase();
+      const currentParty = getCurrentMilitancia(leg.Diputado);
+      const partido = (currentParty?.Partido.Nombre || "").toLowerCase();
       const region = (leg.Region?.Nombre || "").toLowerCase();
 
       return (
-        nombre.includes(query) ||
+        fullName.includes(query) ||
         partido.includes(query) ||
         region.includes(query)
       );
@@ -64,45 +76,77 @@ export default function LegislatorsScreen() {
     filterLegislators();
   }, [filterLegislators]);
 
-  const renderLegislator = ({ item }: { item: any }) => (
-    <ThemedView style={styles.card}>
-      <ThemedView style={styles.legislatorHeader}>
-        <ThemedView style={styles.avatarPlaceholder}>
-          <ThemedText style={styles.avatarText}>
-            {(item.Diputado.Nombre || "N")[0].toUpperCase()}
-          </ThemedText>
-        </ThemedView>
-        <ThemedView style={styles.legislatorInfo}>
-          <ThemedText type="defaultSemiBold">
-            {item.Diputado.Nombre || "Sin nombre"}
-          </ThemedText>
-          {item.Diputado.Militancias.Militancia.Partido?.Alias && (
-            <ThemedView style={styles.chip}>
-              <ThemedText style={styles.chipText}>
-                {item.Diputado.Militancias.Militancia.Partido.Alias}
+  const renderLegislator = ({ item }: { item: DiputadoPeriodo }) => {
+    const { Diputado, Region, Circunscripcion, Email } = item;
+    const fullName = getFullName(Diputado);
+    const currentParty = getCurrentMilitancia(Diputado);
+    const mergedMilitancias = mergeSequentialMilitancias(Diputado.Militancias);
+
+    // Calculate age
+    const birthDate = new Date(Diputado.FechaNacimiento);
+    const age = Math.floor(
+      (Date.now() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+    );
+
+    return (
+      <Pressable
+        onPress={() => router.push(`/legislator/${Diputado.Id}`)}
+        style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      >
+        <ThemedView style={styles.cardContent}>
+          <ThemedView style={styles.legislatorHeader}>
+            <ThemedView style={styles.avatarPlaceholder}>
+              <ThemedText style={styles.avatarText}>
+                {Diputado.Nombre[0].toUpperCase()}
+                {Diputado.ApellidoPaterno[0].toUpperCase()}
               </ThemedText>
             </ThemedView>
+            <ThemedView style={styles.legislatorInfo}>
+              <ThemedText type="defaultSemiBold">{fullName}</ThemedText>
+              <ThemedText style={styles.subText}>
+                {Diputado.Sexo === "Masculino" ? "👨" : "👩"} {age} años
+              </ThemedText>
+              {currentParty && (
+                <ThemedView style={styles.chipContainer}>
+                  <ThemedView style={styles.chip}>
+                    <ThemedText style={styles.chipText}>
+                      {currentParty.Partido.Alias}
+                    </ThemedText>
+                  </ThemedView>
+                  <ThemedText style={styles.partyName}>
+                    {currentParty.Partido.Nombre}
+                  </ThemedText>
+                </ThemedView>
+              )}
+            </ThemedView>
+          </ThemedView>
+
+          {Region?.Nombre && (
+            <ThemedText style={styles.detail}>
+              📍 Región: {Region.Nombre}
+            </ThemedText>
+          )}
+
+          {Circunscripcion?.Nombre && (
+            <ThemedText style={styles.detail}>
+              🗺️ Circunscripción: {Circunscripcion.Nombre}
+            </ThemedText>
+          )}
+
+          {Email && <ThemedText style={styles.detail}>✉️ {Email}</ThemedText>}
+
+          {mergedMilitancias.length > 1 && (
+            <ThemedText style={styles.militanciasInfo}>
+              🔄 {mergedMilitancias.length} partidos políticos
+            </ThemedText>
           )}
         </ThemedView>
-      </ThemedView>
-
-      {item.Region?.Nombre && (
-        <ThemedText style={styles.detail}>
-          📍 Región: {item.Region.Nombre}
-        </ThemedText>
-      )}
-
-      {item.Circunscripcion?.Nombre && (
-        <ThemedText style={styles.detail}>
-          🗺️ Circunscripción: {item.Circunscripcion.Nombre}
-        </ThemedText>
-      )}
-
-      {item.Email && (
-        <ThemedText style={styles.detail}>✉️ {item.Email}</ThemedText>
-      )}
-    </ThemedView>
-  );
+        <ThemedView style={styles.chevronContainer}>
+          <IconSymbol name="chevron.right" size={20} color="#999" />
+        </ThemedView>
+      </Pressable>
+    );
+  };
 
   if (loading) {
     return (
@@ -134,14 +178,20 @@ export default function LegislatorsScreen() {
       <ThemedView style={styles.searchContainer}>
         <TextInput
           placeholder="Buscar por nombre, partido o región..."
-          placeholderTextColor={Colors[colorScheme ?? "light"].tabIconDefault}
+          placeholderTextColor={
+            Colors[(colorScheme ?? "light") as keyof typeof Colors]
+              .tabIconDefault
+          }
           value={searchQuery}
           onChangeText={setSearchQuery}
           style={[
             styles.searchInput,
             {
-              backgroundColor: Colors[colorScheme ?? "light"].background,
-              color: Colors[colorScheme ?? "light"].text,
+              backgroundColor:
+                Colors[(colorScheme ?? "light") as keyof typeof Colors]
+                  .background,
+              color:
+                Colors[(colorScheme ?? "light") as keyof typeof Colors].text,
             },
           ]}
         />
@@ -201,11 +251,26 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   card: {
-    padding: 16,
     marginBottom: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E0E0E0",
+    flexDirection: "row",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  cardPressed: {
+    opacity: 0.7,
+    backgroundColor: "#F5F5F5",
+  },
+  cardContent: {
+    flex: 1,
+    padding: 16,
+  },
+  chevronContainer: {
+    paddingRight: 16,
+    justifyContent: "center",
+    alignItems: "center",
   },
   legislatorHeader: {
     flexDirection: "row",
@@ -229,21 +294,43 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
   },
+  subText: {
+    fontSize: 13,
+    marginTop: 2,
+    opacity: 0.7,
+  },
+  chipContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+    gap: 8,
+  },
   chip: {
     alignSelf: "flex-start",
     backgroundColor: "#E3F2FD",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    marginTop: 4,
   },
   chipText: {
     fontSize: 12,
+    fontWeight: "600",
+    color: "#003DA5",
+  },
+  partyName: {
+    fontSize: 12,
+    opacity: 0.7,
   },
   detail: {
     fontSize: 14,
     marginVertical: 2,
     opacity: 0.8,
+  },
+  militanciasInfo: {
+    fontSize: 12,
+    marginTop: 8,
+    opacity: 0.6,
+    fontStyle: "italic",
   },
   emptyContainer: {
     alignItems: "center",
