@@ -48,6 +48,40 @@ const PARTY_COLORS: { [key: string]: string } = {
   DEFAULT: "#A9A9A9", // Dark Gray
 };
 
+// Political alignment classification
+const PARTY_ALIGNMENT: { [key: string]: "left" | "center" | "right" } = {
+  // Left-wing parties
+  PC: "left",
+  FA: "left",
+  CS: "left",
+  PEV: "left",
+
+  // Center-Left
+  PS: "left",
+  PPD: "left",
+  PR: "left",
+  LIBERAL: "left",
+  PAH: "left",
+  PH: "left",
+  PSC: "center",
+
+  // Center and Center-Right
+  DC: "center",
+  AMA: "center",
+  DEM: "center",
+
+  // Right-wing parties
+  EVOP: "right",
+  RN: "right",
+  UDI: "right",
+  PREP: "right",
+  PNL: "right",
+
+  // Regional and Independent
+  FRVS: "center",
+  IND: "center",
+};
+
 export default function ParliamentChart({
   legislators,
   size = 300,
@@ -63,59 +97,99 @@ export default function ParliamentChart({
         partyAlias: partyId,
         count: 0,
         color: PARTY_COLORS[partyId] || PARTY_COLORS.DEFAULT,
+        alignment: PARTY_ALIGNMENT[partyId] || "center",
       };
     }
     acc[partyId].count++;
     return acc;
-  }, {} as Record<string, { partyName: string; partyAlias: string; count: number; color: string }>);
+  }, {} as Record<string, { partyName: string; partyAlias: string; count: number; color: string; alignment: "left" | "center" | "right" }>);
 
-  // Sort parties by count (descending) for consistent layout
-  const sortedParties = Object.entries(partyGroups).sort(
-    ([, a], [, b]) => b.count - a.count
-  );
+  // Separate parties by alignment
+  const leftParties = Object.entries(partyGroups)
+    .filter(([, party]) => party.alignment === "left")
+    .sort(([, a], [, b]) => b.count - a.count);
+
+  const centerParties = Object.entries(partyGroups)
+    .filter(([, party]) => party.alignment === "center")
+    .sort(([, a], [, b]) => b.count - a.count);
+
+  const rightParties = Object.entries(partyGroups)
+    .filter(([, party]) => party.alignment === "right")
+    .sort(([, a], [, b]) => b.count - a.count);
+
+  // Arrange parties: left-wing on left side (largest at edge), right-wing on right side (largest at edge)
+  // Left side: reverse order so largest is at the leftmost
+  // Right side: normal order so largest is at the rightmost
+  const sortedParties = [
+    ...leftParties,
+    ...centerParties,
+    ...rightParties.reverse(),
+  ];
 
   // Calculate positions for each seat in a semicircle
   const totalSeats = legislators.length;
   const rows = 5; // Number of concentric rows
-  const seatsPerRow = Math.ceil(totalSeats / rows);
 
-  // Generate seat positions
+  // Calculate how many seats per row (more in outer rows)
+  const baseSeatsPerRow = 20;
+  const seatsPerRowArray = Array.from({ length: rows }, (_, i) =>
+    Math.round(baseSeatsPerRow + i * 8)
+  );
+
+  // Adjust to match total seats
+  const totalCalculated = seatsPerRowArray.reduce((a, b) => a + b, 0);
+  const adjustment = totalSeats - totalCalculated;
+  seatsPerRowArray[rows - 1] += adjustment; // Add/subtract from outermost row
+
+  // Generate all positions, sorted by angle for left-to-right filling
+  const allPositions: { x: number; y: number; angle: number }[] = [];
+
+  for (let row = 0; row < rows; row++) {
+    const radius = (size / 2) * (0.5 + row * 0.12); // Inner to outer
+    const seatsInRow = seatsPerRowArray[row];
+
+    for (let seat = 0; seat < seatsInRow; seat++) {
+      // Full semicircle: angle from π (180° left) to 0 (0° right)
+      const angle = Math.PI * (1 - seat / (seatsInRow - 1));
+
+      // Calculate position
+      const x = size / 2 + radius * Math.cos(angle);
+      const y = size / 2 - radius * Math.sin(angle);
+
+      allPositions.push({ x, y, angle });
+    }
+  }
+
+  // Sort positions by angle (descending: left to right)
+  allPositions.sort((a, b) => b.angle - a.angle);
+
+  // Assign party colors to seats in order
   const seats: { x: number; y: number; color: string; partyAlias: string }[] =
     [];
   let currentPartyIndex = 0;
   let currentPartySeats = 0;
   let [, currentPartyData] = sortedParties[0] || ["IND", partyGroups["IND"]];
 
-  for (let row = 0; row < rows; row++) {
-    const radius = (size / 2) * (0.4 + row * 0.15); // Inner to outer
-    const seatsInRow = Math.ceil(seatsPerRow * (1 + row * 0.2)); // More seats in outer rows
+  for (let i = 0; i < totalSeats; i++) {
+    const position = allPositions[i];
 
-    for (let seat = 0; seat < seatsInRow && seats.length < totalSeats; seat++) {
-      // Calculate angle (semicircle from -π to 0)
-      const angle = -Math.PI + (seat / (seatsInRow - 1)) * Math.PI;
-
-      // Calculate position
-      const x = size / 2 + radius * Math.cos(angle);
-      const y = size / 2 + radius * Math.sin(angle);
-
-      // Assign color based on party
-      if (currentPartySeats >= currentPartyData.count) {
-        currentPartyIndex++;
-        if (currentPartyIndex < sortedParties.length) {
-          [, currentPartyData] = sortedParties[currentPartyIndex];
-          currentPartySeats = 0;
-        }
+    // Move to next party if current is full
+    if (currentPartySeats >= currentPartyData.count) {
+      currentPartyIndex++;
+      if (currentPartyIndex < sortedParties.length) {
+        [, currentPartyData] = sortedParties[currentPartyIndex];
+        currentPartySeats = 0;
       }
-
-      seats.push({
-        x,
-        y,
-        color: currentPartyData.color,
-        partyAlias: currentPartyData.partyAlias,
-      });
-
-      currentPartySeats++;
     }
+
+    seats.push({
+      x: position.x,
+      y: position.y,
+      color: currentPartyData.color,
+      partyAlias: currentPartyData.partyAlias,
+    });
+
+    currentPartySeats++;
   }
 
   // Calculate seat size based on container
